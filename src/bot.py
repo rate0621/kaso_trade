@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.config import get_config
 from src.data import fetch_ohlcv_as_df
 from src.exchange import Exchange
-from src.position import check_stop_loss, clear_position, save_position
-from src.strategy import Signal, ma_crossover_signal
+from src.position import check_stop_loss, clear_position, load_position, save_position
+from src.strategy import Signal, rsi_contrarian_signal
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +136,10 @@ def run_bot(interval_seconds: int = 3600) -> None:
 
     logger.info("=" * 50)
     logger.info("Starting trading bot (bitFlyer)...")
+    logger.info(f"Strategy: RSI Contrarian")
     logger.info(f"Symbol: {config.symbol}")
     logger.info(f"Timeframe: {config.timeframe}")
-    logger.info(f"MA periods: {config.ma_short_period}/{config.ma_long_period}")
+    logger.info(f"RSI: period={config.rsi_period}, oversold={config.rsi_oversold}, overbought={config.rsi_overbought}")
     logger.info(f"Max position: {config.max_position_percent * 100}%")
     logger.info(f"Stop loss: {config.stop_loss_percent * 100}%")
     logger.info(f"Supabase: {'Enabled' if is_supabase_configured() else 'Disabled (CSV only)'}")
@@ -155,14 +156,6 @@ def run_bot(interval_seconds: int = 3600) -> None:
             # データ取得
             df = fetch_ohlcv_as_df(exchange, config.symbol, config.timeframe, limit=100)
 
-            # シグナル生成
-            signal = ma_crossover_signal(
-                df,
-                short_period=config.ma_short_period,
-                long_period=config.ma_long_period,
-            )
-            logger.info(f"Signal: {signal.value}")
-
             # 残高確認
             balance = exchange.fetch_balance()
             jpy_balance = float(balance.get("JPY", {}).get("free", 0))
@@ -170,6 +163,19 @@ def run_bot(interval_seconds: int = 3600) -> None:
 
             ticker = exchange.fetch_ticker(config.symbol)
             current_price = ticker["last"]
+
+            # ポジション保有状態を確認
+            has_position = load_position(config.symbol) is not None
+
+            # RSI逆張りシグナル生成
+            signal = rsi_contrarian_signal(
+                df,
+                period=config.rsi_period,
+                oversold=config.rsi_oversold,
+                overbought=config.rsi_overbought,
+                has_position=has_position,
+            )
+            logger.info(f"Signal: {signal.value}")
 
             # 損切りチェック（シグナルより優先）
             if btc_balance > 0.001 and check_stop_loss(

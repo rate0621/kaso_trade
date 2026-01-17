@@ -15,8 +15,8 @@ import json
 from src.config import get_config
 from src.data import fetch_ohlcv_as_df
 from src.exchange import Exchange
-from src.position import check_stop_loss, clear_position, save_position
-from src.strategy import Signal, ma_crossover_signal
+from src.position import check_stop_loss, clear_position, load_position, save_position
+from src.strategy import Signal, rsi_contrarian_signal
 
 
 def is_supabase_configured() -> bool:
@@ -68,13 +68,6 @@ def run_trading_cycle() -> dict:
     # データ取得（bitbankから取得）
     df = fetch_ohlcv_as_df(exchange, config.symbol, config.timeframe, limit=100)
 
-    # シグナル生成
-    signal = ma_crossover_signal(
-        df,
-        short_period=config.ma_short_period,
-        long_period=config.ma_long_period,
-    )
-
     # 残高確認
     balance = exchange.fetch_balance()
     jpy_balance = float(balance.get("JPY", {}).get("free", 0))
@@ -83,14 +76,28 @@ def run_trading_cycle() -> dict:
     ticker = exchange.fetch_ticker(config.symbol)
     current_price = ticker["last"]
 
+    # ポジション保有状態を確認
+    has_position = load_position(config.symbol) is not None
+
+    # RSI逆張りシグナル生成
+    signal = rsi_contrarian_signal(
+        df,
+        period=config.rsi_period,
+        oversold=config.rsi_oversold,
+        overbought=config.rsi_overbought,
+        has_position=has_position,
+    )
+
     result = {
         "timestamp": datetime.now().isoformat(),
         "exchange": "bitflyer",
+        "strategy": "rsi_contrarian",
         "signal": signal.value,
         "price": current_price,
         "balance_jpy": jpy_balance,
         "balance_btc": btc_balance,
         "action": "none",
+        "has_position": has_position,
         "supabase_enabled": is_supabase_configured(),
     }
 

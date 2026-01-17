@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.strategy import Signal, ma_crossover_signal
+from src.strategy import Signal, ma_crossover_signal, rsi_contrarian_signal
 
 
 def create_test_df(prices: list[float]) -> pd.DataFrame:
@@ -53,4 +53,54 @@ class TestMACrossoverSignal:
         prices = [100] * 10  # 短すぎ
         df = create_test_df(prices)
         signal = ma_crossover_signal(df, short_period=5, long_period=20)
+        assert signal == Signal.HOLD
+
+
+class TestRSIContrarianSignal:
+    """RSI逆張り戦略シグナルのテスト。"""
+
+    def test_oversold_buy(self):
+        """売られすぎ（RSI<30）でBUYシグナルが出ること。"""
+        # 大きく下落するパターン（RSIが30未満になる）
+        prices = [100] * 20 + [95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=False)
+        assert signal == Signal.BUY
+
+    def test_overbought_sell(self):
+        """買われすぎ（RSI>70）でSELLシグナルが出ること（ポジションあり）。"""
+        # 大きく上昇するパターン（RSIが70超になる）
+        prices = [100] * 20 + [105, 110, 115, 120, 125, 130, 135, 140, 145, 150]
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=True)
+        assert signal == Signal.SELL
+
+    def test_no_position_no_sell(self):
+        """ポジションなしでは買われすぎでもSELLシグナルが出ないこと。"""
+        # RSIが70超でもポジションがなければ売らない
+        prices = [100] * 20 + [105, 110, 115, 120, 125, 130, 135, 140, 145, 150]
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=False)
+        assert signal == Signal.HOLD
+
+    def test_has_position_no_buy(self):
+        """ポジションありでは売られすぎでもBUYシグナルが出ないこと。"""
+        # RSIが30未満でもポジションがあれば買わない（売りシグナルを待つ）
+        prices = [100] * 20 + [95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=True)
+        assert signal == Signal.HOLD
+
+    def test_neutral_hold(self):
+        """RSIが30-70の間ではHOLDシグナルが出ること。"""
+        prices = [100] * 30  # 横ばい（RSI≒50）
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=False)
+        assert signal == Signal.HOLD
+
+    def test_insufficient_data(self):
+        """データ不足時はHOLDシグナルが出ること。"""
+        prices = [100] * 5  # 短すぎ
+        df = create_test_df(prices)
+        signal = rsi_contrarian_signal(df, period=14, oversold=30, overbought=70, has_position=False)
         assert signal == Signal.HOLD

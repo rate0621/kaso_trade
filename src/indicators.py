@@ -1,7 +1,8 @@
 """テクニカル指標計算モジュール。"""
 
 import pandas as pd
-from ta.trend import SMAIndicator, EMAIndicator
+from ta.momentum import RSIIndicator
+from ta.trend import EMAIndicator, SMAIndicator
 
 
 def add_sma(df: pd.DataFrame, period: int, column: str = "close") -> pd.DataFrame:
@@ -53,4 +54,20 @@ def add_moving_averages(
     """
     df = add_sma(df, short_period)
     df = add_sma(df, long_period)
+    return df
+
+
+def add_rsi(df: pd.DataFrame, period: int = 14, column: str = "close") -> pd.DataFrame:
+    """RSI（相対力指数）を追加する。
+
+    Args:
+        df: OHLCVデータのDataFrame
+        period: RSI計算期間
+        column: 計算に使用するカラム名
+
+    Returns:
+        RSIカラムが追加されたDataFrame
+    """
+    rsi = RSIIndicator(close=df[column], window=period)
+    df[f"rsi_{period}"] = rsi.rsi()
     return df

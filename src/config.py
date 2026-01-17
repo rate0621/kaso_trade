@@ -29,7 +29,12 @@ class Config:
     # 損切り設定
     stop_loss_percent: float
 
-    # 移動平均設定
+    # RSI設定
+    rsi_period: int
+    rsi_oversold: int
+    rsi_overbought: int
+
+    # 移動平均設定（レガシー、将来削除予定）
     ma_short_period: int
     ma_long_period: int
 
@@ -69,6 +74,9 @@ def load_config() -> Config:
         timeframe=os.environ.get("TIMEFRAME", "1h"),
         max_position_percent=float(os.environ.get("MAX_POSITION_PERCENT", "0.35")),
         stop_loss_percent=float(os.environ.get("STOP_LOSS_PERCENT", "0.10")),
+        rsi_period=int(os.environ.get("RSI_PERIOD", "14")),
+        rsi_oversold=int(os.environ.get("RSI_OVERSOLD", "30")),
+        rsi_overbought=int(os.environ.get("RSI_OVERBOUGHT", "70")),
         ma_short_period=int(os.environ.get("MA_SHORT_PERIOD", "10")),
         ma_long_period=int(os.environ.get("MA_LONG_PERIOD", "20")),
     )
