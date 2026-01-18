@@ -1,7 +1,7 @@
 """データ取得・加工モジュール。
 
 bitFlyerはOHLCVをサポートしていないため、
-Binanceから BTC/USDT のOHLCVデータを取得する。
+BybitからBTC/USDTのOHLCVデータを取得する。
 （価格変動パターンはBTC/JPYと同等のため、RSI計算に使用可能）
 """
 
@@ -13,16 +13,16 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # OHLCVデータ取得用（APIキー不要）
-_binance: ccxt.binance | None = None
+_bybit: ccxt.bybit | None = None
 
 
-def get_binance() -> ccxt.binance:
-    """Binanceクライアントを取得する（OHLCVデータ用）。"""
-    global _binance
-    if _binance is None:
-        _binance = ccxt.binance({"enableRateLimit": True})
-        logger.info("Binance client initialized for OHLCV data")
-    return _binance
+def get_bybit() -> ccxt.bybit:
+    """Bybitクライアントを取得する（OHLCVデータ用）。"""
+    global _bybit
+    if _bybit is None:
+        _bybit = ccxt.bybit({"enableRateLimit": True})
+        logger.info("Bybit client initialized for OHLCV data")
+    return _bybit
 
 
 def ohlcv_to_dataframe(ohlcv: list[list]) -> pd.DataFrame:
@@ -52,7 +52,7 @@ def fetch_ohlcv_as_df(
     """OHLCVデータを取得してDataFrameで返す。
 
     bitFlyerはOHLCVをサポートしていないため、
-    BinanceからBTC/USDTのデータを取得する。
+    BybitからBTC/USDTのデータを取得する。
     （RSI計算には価格の相対的な動きが重要なため、USDTベースでも問題なし）
 
     Args:
@@ -64,10 +64,10 @@ def fetch_ohlcv_as_df(
     Returns:
         OHLCVデータのDataFrame
     """
-    binance = get_binance()
-    # BTC/JPY → BTC/USDT に変換（Binanceには JPY ペアがない）
-    binance_symbol = "BTC/USDT"
-    ohlcv = binance.fetch_ohlcv(binance_symbol, timeframe, limit=limit)
+    bybit = get_bybit()
+    # BTC/JPY → BTC/USDT に変換
+    bybit_symbol = "BTC/USDT"
+    ohlcv = bybit.fetch_ohlcv(bybit_symbol, timeframe, limit=limit)
     df = ohlcv_to_dataframe(ohlcv)
-    logger.info(f"Fetched {len(df)} candles for {binance_symbol} {timeframe} (via Binance)")
+    logger.info(f"Fetched {len(df)} candles for {bybit_symbol} {timeframe} (via Bybit)")
     return df
