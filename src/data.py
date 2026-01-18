@@ -1,7 +1,7 @@
 """データ取得・加工モジュール。
 
 bitFlyerはOHLCVをサポートしていないため、
-BybitからBTC/USDTのOHLCVデータを取得する。
+KuCoinからBTC/USDTのOHLCVデータを取得する。
 （価格変動パターンはBTC/JPYと同等のため、RSI計算に使用可能）
 """
 
@@ -13,16 +13,16 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # OHLCVデータ取得用（APIキー不要）
-_bybit: ccxt.bybit | None = None
+_kucoin: ccxt.kucoin | None = None
 
 
-def get_bybit() -> ccxt.bybit:
-    """Bybitクライアントを取得する（OHLCVデータ用）。"""
-    global _bybit
-    if _bybit is None:
-        _bybit = ccxt.bybit({"enableRateLimit": True})
-        logger.info("Bybit client initialized for OHLCV data")
-    return _bybit
+def get_kucoin() -> ccxt.kucoin:
+    """KuCoinクライアントを取得する（OHLCVデータ用）。"""
+    global _kucoin
+    if _kucoin is None:
+        _kucoin = ccxt.kucoin({"enableRateLimit": True})
+        logger.info("KuCoin client initialized for OHLCV data")
+    return _kucoin
 
 
 def ohlcv_to_dataframe(ohlcv: list[list]) -> pd.DataFrame:
@@ -52,7 +52,7 @@ def fetch_ohlcv_as_df(
     """OHLCVデータを取得してDataFrameで返す。
 
     bitFlyerはOHLCVをサポートしていないため、
-    BybitからBTC/USDTのデータを取得する。
+    KuCoinからBTC/USDTのデータを取得する。
     （RSI計算には価格の相対的な動きが重要なため、USDTベースでも問題なし）
 
     Args:
@@ -64,10 +64,10 @@ def fetch_ohlcv_as_df(
     Returns:
         OHLCVデータのDataFrame
     """
-    bybit = get_bybit()
+    kucoin = get_kucoin()
     # BTC/JPY → BTC/USDT に変換
-    bybit_symbol = "BTC/USDT"
-    ohlcv = bybit.fetch_ohlcv(bybit_symbol, timeframe, limit=limit)
+    kucoin_symbol = "BTC/USDT"
+    ohlcv = kucoin.fetch_ohlcv(kucoin_symbol, timeframe, limit=limit)
     df = ohlcv_to_dataframe(ohlcv)
-    logger.info(f"Fetched {len(df)} candles for {bybit_symbol} {timeframe} (via Bybit)")
+    logger.info(f"Fetched {len(df)} candles for {kucoin_symbol} {timeframe} (via KuCoin)")
     return df
