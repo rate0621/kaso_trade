@@ -82,26 +82,72 @@ def rsi_contrarian_signal(
     Returns:
         売買シグナル
     """
-    df = add_rsi(df.copy(), period)
-    rsi_col = f"rsi_{period}"
+    df = df.copy()
+    closes = df["close"]
 
-    # RSIが計算できない場合
-    if df[rsi_col].isna().iloc[-1]:
+    # RSI計算の詳細ログ
+    logger.info(f"=== RSI計算開始 (期間: {period}) ===")
+
+    # 直近の価格変動を表示
+    recent_prices = closes.tail(period + 1)
+    logger.info(f"直近{period + 1}本の終値: {[f'{p:.2f}' for p in recent_prices.values]}")
+
+    # 価格変動を計算
+    deltas = closes.diff()
+    gains = deltas.where(deltas > 0, 0.0)
+    losses = (-deltas).where(deltas < 0, 0.0)
+
+    # 直近periodの上昇/下降
+    recent_gains = gains.tail(period)
+    recent_losses = losses.tail(period)
+
+    gain_count = (recent_gains > 0).sum()
+    loss_count = (recent_losses > 0).sum()
+    total_gain = recent_gains.sum()
+    total_loss = recent_losses.sum()
+
+    logger.info(f"直近{period}本: 上昇{gain_count}回(計{total_gain:.2f}), 下降{loss_count}回(計{total_loss:.2f})")
+
+    # 平均上昇/下降
+    avg_gain = gains.rolling(window=period, min_periods=period).mean()
+    avg_loss = losses.rolling(window=period, min_periods=period).mean()
+
+    current_avg_gain = avg_gain.iloc[-1]
+    current_avg_loss = avg_loss.iloc[-1]
+
+    # RSI計算
+    if pd.isna(current_avg_gain) or pd.isna(current_avg_loss):
         logger.warning("Not enough data for RSI calculation")
         return Signal.HOLD
 
-    current_rsi = df[rsi_col].iloc[-1]
+    if current_avg_loss == 0:
+        current_rsi = 100.0
+    else:
+        rs = current_avg_gain / current_avg_loss
+        current_rsi = 100 - (100 / (1 + rs))
 
-    # ポジションを持っている場合: 買われすぎで売り
+    logger.info(f"平均上昇: {current_avg_gain:.4f}, 平均下降: {current_avg_loss:.4f}")
+    logger.info(f"RSI = {current_rsi:.2f} (売られすぎ: <{oversold}, 買われすぎ: >{overbought})")
+    logger.info(f"ポジション: {'あり' if has_position else 'なし'}")
+
+    # シグナル判定
+    signal = Signal.HOLD
+    reason = ""
+
     if has_position:
         if current_rsi > overbought:
-            logger.info(f"RSI overbought signal: RSI={current_rsi:.1f} > {overbought}")
-            return Signal.SELL
-        return Signal.HOLD
+            signal = Signal.SELL
+            reason = f"RSI({current_rsi:.1f}) > {overbought} → 買われすぎ、売りシグナル"
+        else:
+            reason = f"RSI({current_rsi:.1f}) <= {overbought} → まだ売り時ではない、ホールド"
+    else:
+        if current_rsi < oversold:
+            signal = Signal.BUY
+            reason = f"RSI({current_rsi:.1f}) < {oversold} → 売られすぎ、買いシグナル"
+        else:
+            reason = f"RSI({current_rsi:.1f}) >= {oversold} → まだ買い時ではない、ホールド"
 
-    # ポジションを持っていない場合: 売られすぎで買い
-    if current_rsi < oversold:
-        logger.info(f"RSI oversold signal: RSI={current_rsi:.1f} < {oversold}")
-        return Signal.BUY
+    logger.info(f"判定: {reason}")
+    logger.info(f"=== 結果: {signal.value.upper()} ===")
 
-    return Signal.HOLD
+    return signal
