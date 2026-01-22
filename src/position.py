@@ -83,7 +83,8 @@ def load_position_supabase(symbol: str) -> Optional[Position]:
     key = os.environ["SUPABASE_KEY"]
     client = create_client(url, key)
 
-    result = client.table("positions").select("*").eq("symbol", symbol).execute()
+    # 必要なカラムのみ取得（idは除外）
+    result = client.table("positions").select("symbol, entry_price, amount, entry_time").eq("symbol", symbol).execute()
     if result.data:
         return Position(**result.data[0])
     return None
