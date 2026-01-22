@@ -5,7 +5,8 @@
 
 Usage:
     python scripts/backtest_rsi.py
-    python scripts/backtest_rsi.py --days 365
+    python scripts/backtest_rsi.py --symbol ETH/USDT
+    python scripts/backtest_rsi.py --symbol XRP/USDT --days 365
     python scripts/backtest_rsi.py --verbose
 """
 
@@ -67,6 +68,12 @@ class BacktestResult:
 def parse_args() -> argparse.Namespace:
     """コマンドライン引数をパースする。"""
     parser = argparse.ArgumentParser(description="RSI逆張り戦略バックテスト")
+    parser.add_argument(
+        "--symbol",
+        type=str,
+        default="BTC/USDT",
+        help="通貨ペア（デフォルト: BTC/USDT）例: ETH/USDT, XRP/USDT",
+    )
     parser.add_argument(
         "--days",
         type=int,
@@ -365,10 +372,12 @@ def check_overfitting(
 def main() -> None:
     """メイン処理。"""
     args = parse_args()
+    symbol = args.symbol
 
     print("=" * 70)
-    print("RSI逆張り戦略 バックテスト開始")
+    print(f"RSI逆張り戦略 バックテスト開始 【{symbol}】")
     print("=" * 70)
+    print(f"通貨ペア: {symbol}")
     print(f"RSI期間: {RSI_PERIODS}")
     print(f"売られすぎレベル: {RSI_OVERSOLD_LEVELS}")
     print(f"買われすぎレベル: {RSI_OVERBOUGHT_LEVELS}")
@@ -378,7 +387,7 @@ def main() -> None:
 
     # データ取得
     print("\n[1] データ取得")
-    df = fetch_ohlcv_data(days=args.days, use_cache=not args.no_cache, verbose=args.verbose)
+    df = fetch_ohlcv_data(days=args.days, use_cache=not args.no_cache, verbose=args.verbose, symbol=symbol)
 
     print(f"  期間: {df.index[0]} 〜 {df.index[-1]}")
     print(f"  データ数: {len(df)}本")
@@ -409,11 +418,12 @@ def main() -> None:
     all_results = run_rsi_backtest(df, args.verbose)
     print_results(all_results, "=== 全期間の結果 ===")
 
-    # CSV保存
-    save_results(all_results, "backtest_rsi_results.csv")
+    # CSV保存（通貨ペアごとにファイル名を変更）
+    symbol_name = symbol.replace("/", "_").lower()
+    save_results(all_results, f"backtest_rsi_{symbol_name}_results.csv")
 
     print("\n" + "=" * 70)
-    print("RSI逆張り戦略 バックテスト完了")
+    print(f"RSI逆張り戦略 バックテスト完了 【{symbol}】")
     print("=" * 70)
 
 

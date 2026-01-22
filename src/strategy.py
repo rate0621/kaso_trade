@@ -19,15 +19,20 @@ class Signal(Enum):
 
 def ma_crossover_signal(
     df: pd.DataFrame,
-    short_period: int = 10,
-    long_period: int = 20
+    short_period: int = 25,
+    long_period: int = 75,
+    has_position: bool = False,
 ) -> Signal:
-    """移動平均クロスオーバーでシグナルを生成する。
+    """移動平均クロスオーバー（順張り）でシグナルを生成する。
+
+    短期MAが長期MAを上抜け（ゴールデンクロス）で買い、
+    短期MAが長期MAを下抜け（デッドクロス）で売り。
 
     Args:
         df: OHLCVデータのDataFrame
         short_period: 短期移動平均期間
         long_period: 長期移動平均期間
+        has_position: ポジションを保有しているか
 
     Returns:
         売買シグナル
@@ -42,23 +47,51 @@ def ma_crossover_signal(
         logger.warning("Not enough data for MA calculation")
         return Signal.HOLD
 
+    # MA計算の詳細ログ
+    logger.info(f"=== MA計算開始 (短期: {short_period}, 長期: {long_period}) ===")
+
     # 現在と1本前のクロス状態を確認
     current_short = df[short_col].iloc[-1]
     current_long = df[long_col].iloc[-1]
     prev_short = df[short_col].iloc[-2]
     prev_long = df[long_col].iloc[-2]
 
-    # ゴールデンクロス（短期が長期を下から上に抜けた）
-    if prev_short <= prev_long and current_short > current_long:
-        logger.info(f"Golden Cross detected: short={current_short:.2f}, long={current_long:.2f}")
-        return Signal.BUY
+    logger.info(f"現在: 短期MA={current_short:.2f}, 長期MA={current_long:.2f}")
+    logger.info(f"1本前: 短期MA={prev_short:.2f}, 長期MA={prev_long:.2f}")
+    logger.info(f"ポジション: {'あり' if has_position else 'なし'}")
 
-    # デッドクロス（短期が長期を上から下に抜けた）
-    if prev_short >= prev_long and current_short < current_long:
-        logger.info(f"Dead Cross detected: short={current_short:.2f}, long={current_long:.2f}")
-        return Signal.SELL
+    signal = Signal.HOLD
+    reason = ""
 
-    return Signal.HOLD
+    # ゴールデンクロス（短期が長期を下から上に抜けた）→ 買いシグナル
+    golden_cross = prev_short <= prev_long and current_short > current_long
+    # デッドクロス（短期が長期を上から下に抜けた）→ 売りシグナル
+    dead_cross = prev_short >= prev_long and current_short < current_long
+
+    if has_position:
+        # ポジションあり → 売りシグナルのみ判定
+        if dead_cross:
+            signal = Signal.SELL
+            reason = f"デッドクロス検出（短期{current_short:.2f} < 長期{current_long:.2f}）→ 売りシグナル"
+        elif current_short < current_long:
+            # トレンド転換の可能性（まだクロスしていないがMAが接近）
+            reason = f"短期MA < 長期MA、売り待機（クロス待ち）"
+        else:
+            reason = f"短期MA > 長期MA、上昇トレンド継続、ホールド"
+    else:
+        # ポジションなし → 買いシグナルのみ判定
+        if golden_cross:
+            signal = Signal.BUY
+            reason = f"ゴールデンクロス検出（短期{current_short:.2f} > 長期{current_long:.2f}）→ 買いシグナル"
+        elif current_short > current_long:
+            reason = f"短期MA > 長期MA、上昇トレンド中だがエントリー待ち（クロス待ち）"
+        else:
+            reason = f"短期MA < 長期MA、下降トレンド、買い控え"
+
+    logger.info(f"判定: {reason}")
+    logger.info(f"=== 結果: {signal.value.upper()} ===")
+
+    return signal
 
 
 def rsi_contrarian_signal(

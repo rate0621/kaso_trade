@@ -139,5 +139,10 @@ class Exchange:
         self.exchange.load_markets()
         market = self.exchange.market(symbol)
         min_amount = market.get("limits", {}).get("amount", {}).get("min", 0)
-        # bitFlyerのBTC最小注文は0.001 BTC
-        return Decimal(str(min_amount)) if min_amount else Decimal("0.001")
+        if min_amount:
+            return Decimal(str(min_amount))
+        # bitFlyerの最小注文量（APIで取得できない場合のフォールバック）
+        # BTC: 0.001, ETH: 0.01
+        crypto = symbol.split("/")[0]
+        defaults = {"BTC": "0.001", "ETH": "0.01"}
+        return Decimal(defaults.get(crypto, "0.01"))

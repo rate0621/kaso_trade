@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # ディレクトリ設定
 DATA_DIR = Path(__file__).parent.parent / "data"
 RESULTS_DIR = Path(__file__).parent.parent / "results"
-CACHE_FILE = DATA_DIR / "btc_usdt_1h.csv"
 
 # デフォルトパラメータ
 DEFAULT_MA_SHORT_PERIODS = [5, 10, 15, 20, 25]
@@ -70,6 +69,12 @@ def parse_args() -> argparse.Namespace:
     """コマンドライン引数をパースする。"""
     parser = argparse.ArgumentParser(description="バックテストスクリプト")
     parser.add_argument(
+        "--symbol",
+        type=str,
+        default="BTC/USDT",
+        help="通貨ペア（デフォルト: BTC/USDT）例: ETH/USDT, XRP/USDT",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=365,
@@ -100,22 +105,32 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def fetch_ohlcv_data(days: int = 365, use_cache: bool = True, verbose: bool = False) -> pd.DataFrame:
+def fetch_ohlcv_data(
+    days: int = 365,
+    use_cache: bool = True,
+    verbose: bool = False,
+    symbol: str = "BTC/USDT"
+) -> pd.DataFrame:
     """OHLCVデータを取得する。
 
     Args:
         days: 取得する日数
         use_cache: キャッシュを使用するか
         verbose: 詳細ログを出力するか
+        symbol: 通貨ペア（例: BTC/USDT, ETH/USDT）
 
     Returns:
         OHLCVデータのDataFrame
     """
+    # キャッシュファイル名を通貨ペアから生成
+    cache_filename = symbol.replace("/", "_").lower() + "_1h.csv"
+    cache_file = DATA_DIR / cache_filename
+
     # キャッシュ確認
-    if use_cache and CACHE_FILE.exists():
+    if use_cache and cache_file.exists():
         if verbose:
-            print(f"キャッシュからデータを読み込み: {CACHE_FILE}")
-        df = pd.read_csv(CACHE_FILE, parse_dates=["datetime"])
+            print(f"キャッシュからデータを読み込み: {cache_file}")
+        df = pd.read_csv(cache_file, parse_dates=["datetime"])
         df.set_index("datetime", inplace=True)
 
         # キャッシュが十分な期間をカバーしているか確認
@@ -126,13 +141,10 @@ def fetch_ohlcv_data(days: int = 365, use_cache: bool = True, verbose: bool = Fa
         if verbose:
             print(f"キャッシュが不十分（{cache_days}日分）、新規取得します")
 
-    # Binanceからデータを取得（bitbankはデータ取得に制限があるため）
-    # 注意: BTC/USDTのデータを使用。価格の動きはBTC/JPYとほぼ同じ
-    print("  BinanceからOHLCVデータを取得中...")
-    print("  ※ BTC/USDTデータを使用（価格変動パターンはBTC/JPYと同等）")
+    # Binanceからデータを取得
+    print(f"  Binanceから{symbol}のOHLCVデータを取得中...")
 
     exchange = ccxt.binance({"enableRateLimit": True})
-    symbol = "BTC/USDT"
     timeframe = "1h"
 
     all_ohlcv = []
@@ -182,9 +194,9 @@ def fetch_ohlcv_data(days: int = 365, use_cache: bool = True, verbose: bool = Fa
 
     # キャッシュに保存
     DATA_DIR.mkdir(exist_ok=True)
-    df.reset_index().to_csv(CACHE_FILE, index=False)
+    df.reset_index().to_csv(cache_file, index=False)
     if verbose:
-        print(f"  キャッシュに保存: {CACHE_FILE}")
+        print(f"  キャッシュに保存: {cache_file}")
 
     return df
 
@@ -453,6 +465,7 @@ def check_overfitting(
 def main() -> None:
     """メイン処理。"""
     args = parse_args()
+    symbol = args.symbol
 
     # パラメータ設定
     if args.short:
@@ -466,8 +479,9 @@ def main() -> None:
         ma_long_periods = DEFAULT_MA_LONG_PERIODS
 
     print("=" * 60)
-    print("バックテスト開始")
+    print(f"MAクロスオーバー バックテスト開始 【{symbol}】")
     print("=" * 60)
+    print(f"通貨ペア: {symbol}")
     print(f"短期MA期間: {ma_short_periods}")
     print(f"長期MA期間: {ma_long_periods}")
     print(f"初期資金: {INITIAL_CAPITAL:,} USDT")
@@ -477,7 +491,7 @@ def main() -> None:
 
     # データ取得
     print("\n[1] データ取得")
-    df = fetch_ohlcv_data(days=args.days, use_cache=not args.no_cache, verbose=args.verbose)
+    df = fetch_ohlcv_data(days=args.days, use_cache=not args.no_cache, verbose=args.verbose, symbol=symbol)
 
     print(f"  期間: {df.index[0]} 〜 {df.index[-1]}")
     print(f"  データ数: {len(df)}本")
@@ -508,11 +522,12 @@ def main() -> None:
     all_results = run_backtest(df, ma_short_periods, ma_long_periods, args.verbose)
     print_results(all_results, "=== 全期間の結果 ===")
 
-    # CSV保存
-    save_results(all_results, "backtest_results.csv")
+    # CSV保存（通貨ペアごとにファイル名を変更）
+    symbol_name = symbol.replace("/", "_").lower()
+    save_results(all_results, f"backtest_ma_{symbol_name}_results.csv")
 
     print("\n" + "=" * 60)
-    print("バックテスト完了")
+    print(f"MAクロスオーバー バックテスト完了 【{symbol}】")
     print("=" * 60)
 
 

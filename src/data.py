@@ -1,8 +1,8 @@
 """データ取得・加工モジュール。
 
 bitFlyerはOHLCVをサポートしていないため、
-KuCoinからBTC/USDTのOHLCVデータを取得する。
-（価格変動パターンはBTC/JPYと同等のため、RSI計算に使用可能）
+KuCoinからOHLCVデータを取得する。
+（価格変動パターンは同等のため、RSI/MA計算に使用可能）
 """
 
 import logging
@@ -43,6 +43,20 @@ def ohlcv_to_dataframe(ohlcv: list[list]) -> pd.DataFrame:
     return df
 
 
+def _convert_to_kucoin_symbol(symbol: str) -> str:
+    """bitFlyerのシンボルをKuCoinのシンボルに変換する。
+
+    Args:
+        symbol: bitFlyerのシンボル（例: 'BTC/JPY', 'ETH/JPY'）
+
+    Returns:
+        KuCoinのシンボル（例: 'BTC/USDT', 'ETH/USDT'）
+    """
+    # BTC/JPY → BTC/USDT, ETH/JPY → ETH/USDT
+    base = symbol.split("/")[0]
+    return f"{base}/USDT"
+
+
 def fetch_ohlcv_as_df(
     exchange,  # Exchange型だが、bitFlyerでは使わない
     symbol: str,
@@ -52,12 +66,12 @@ def fetch_ohlcv_as_df(
     """OHLCVデータを取得してDataFrameで返す。
 
     bitFlyerはOHLCVをサポートしていないため、
-    KuCoinからBTC/USDTのデータを取得する。
-    （RSI計算には価格の相対的な動きが重要なため、USDTベースでも問題なし）
+    KuCoinから対応する通貨ペアのデータを取得する。
+    （RSI/MA計算には価格の相対的な動きが重要なため、USDTベースでも問題なし）
 
     Args:
         exchange: Exchangeインスタンス（未使用、互換性のため）
-        symbol: 通貨ペア（例: 'BTC/JPY'）→ BTC/USDTに変換
+        symbol: 通貨ペア（例: 'BTC/JPY', 'ETH/JPY'）→ XXX/USDTに変換
         timeframe: 時間足
         limit: 取得する本数
 
@@ -65,8 +79,7 @@ def fetch_ohlcv_as_df(
         OHLCVデータのDataFrame
     """
     kucoin = get_kucoin()
-    # BTC/JPY → BTC/USDT に変換
-    kucoin_symbol = "BTC/USDT"
+    kucoin_symbol = _convert_to_kucoin_symbol(symbol)
     ohlcv = kucoin.fetch_ohlcv(kucoin_symbol, timeframe, limit=limit)
     df = ohlcv_to_dataframe(ohlcv)
     logger.info(f"Fetched {len(df)} candles for {kucoin_symbol} {timeframe} (via KuCoin)")
