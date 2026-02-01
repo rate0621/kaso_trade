@@ -19,6 +19,14 @@ from src.strategy import Signal, ma_crossover_signal, rsi_contrarian_signal
 logger = logging.getLogger(__name__)
 
 
+class Trend:
+    """トレンド状態。"""
+
+    UPTREND = "uptrend"  # 上昇トレンド
+    DOWNTREND = "downtrend"  # 下降トレンド
+    SIDEWAYS = "sideways"  # 横ばい
+
+
 @dataclass
 class TradeResult:
     """取引結果。"""
@@ -34,6 +42,7 @@ class TradeResult:
     amount: Optional[Decimal] = None
     order_id: Optional[str] = None
     error: Optional[str] = None
+    trend: Optional[str] = None  # トレンド状態
 
 
 def is_supabase_configured() -> bool:
@@ -73,6 +82,51 @@ def get_min_balance(symbol: str) -> float:
     if crypto == "BTC":
         return 0.001
     return 0.01  # ETHなど
+
+
+def check_trend(df, ma_period: int = 50, lookback: int = 5) -> str:
+    """トレンドを判定する。
+
+    判定ロジック:
+    - 価格 > MA50 かつ MA50が上向き → 上昇トレンド
+    - 価格 < MA50 かつ MA50が下向き → 下降トレンド
+    - それ以外 → 横ばい
+
+    Args:
+        df: OHLCVデータ
+        ma_period: 移動平均期間
+        lookback: MA傾き判定の期間
+
+    Returns:
+        トレンド状態
+    """
+    df = df.copy()
+    df[f"ma{ma_period}"] = df["close"].rolling(ma_period).mean()
+
+    if len(df) < ma_period + lookback:
+        logger.warning("Not enough data for trend check")
+        return Trend.SIDEWAYS
+
+    current_price = df["close"].iloc[-1]
+    current_ma = df[f"ma{ma_period}"].iloc[-1]
+    prev_ma = df[f"ma{ma_period}"].iloc[-1 - lookback]
+
+    price_above_ma = current_price > current_ma
+    ma_rising = current_ma > prev_ma
+
+    if price_above_ma and ma_rising:
+        trend = Trend.UPTREND
+    elif not price_above_ma and not ma_rising:
+        trend = Trend.DOWNTREND
+    else:
+        trend = Trend.SIDEWAYS
+
+    logger.info(
+        f"Trend: {trend} (price={current_price:.0f}, "
+        f"MA{ma_period}={current_ma:.0f}, rising={ma_rising})"
+    )
+
+    return trend
 
 
 def get_signal_for_symbol(
@@ -137,9 +191,22 @@ def process_symbol(
     # ※ポジションデータ（Supabase）は購入価格の記録として損切り計算にのみ使用
     has_position = crypto_balance > min_balance
 
+    # トレンド判定（MA50ベース）
+    trend = check_trend(df, ma_period=50, lookback=5)
+
     # 戦略に応じたシグナル生成
     signal = get_signal_for_symbol(df, symbol_config, has_position)
-    logger.info(f"[{symbol}] Signal: {signal.value}")
+    logger.info(f"[{symbol}] Signal: {signal.value}, Trend: {trend}")
+
+    # RSI逆張り戦略の場合のみ、下降トレンドで買いシグナルをスキップ
+    # （順張りMAクロスオーバーは自身でトレンドを判断しているためフィルター不要）
+    if (
+        symbol_config.strategy == Strategy.RSI_CONTRARIAN
+        and signal == Signal.BUY
+        and trend == Trend.DOWNTREND
+    ):
+        logger.warning(f"[{symbol}] Buy signal skipped due to downtrend (RSI contrarian)")
+        signal = Signal.HOLD
 
     result = TradeResult(
         symbol=symbol,
@@ -149,6 +216,7 @@ def process_symbol(
         balance_jpy=jpy_balance,
         balance_crypto=crypto_balance,
         has_position=has_position,
+        trend=trend,
     )
 
     order_unit = get_order_unit(symbol)

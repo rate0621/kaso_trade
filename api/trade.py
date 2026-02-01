@@ -57,6 +57,7 @@ def result_to_dict(result: TradeResult) -> dict:
         "symbol": result.symbol,
         "strategy": result.strategy,
         "signal": result.signal,
+        "trend": result.trend,
         "price": result.price,
         "balance_jpy": result.balance_jpy,
         f"balance_{crypto.lower()}": result.balance_crypto,
