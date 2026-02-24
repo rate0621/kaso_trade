@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 # .envファイルがあれば読み込む（ローカル開発用）
 load_dotenv()
 
+# Supabaseテーブル名（複数アプリ共有のためプレフィックス付き）
+TABLE_PREFIX = "kaso_trade__"
+TRADE_LOGS_TABLE = f"{TABLE_PREFIX}trade_logs"
+POSITIONS_TABLE = f"{TABLE_PREFIX}positions"
+
 
 class Strategy(Enum):
     """取引戦略。"""

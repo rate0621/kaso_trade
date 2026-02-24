@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 from supabase import create_client, Client
 
+from src.config import TRADE_LOGS_TABLE
+
 if TYPE_CHECKING:
     pass
 
@@ -91,7 +93,7 @@ def save_trade_log(
         "order_id": order_id,
     }
 
-    result = client.table("trade_logs").insert(data).execute()
+    result = client.table(TRADE_LOGS_TABLE).insert(data).execute()
     logger.info(f"Trade log saved: {action} {amount} {symbol} @ {price}")
 
     return result.data[0] if result.data else {}
@@ -114,7 +116,7 @@ def get_trade_logs(
     """
     client = get_supabase_client()
 
-    query = client.table("trade_logs").select("*")
+    query = client.table(TRADE_LOGS_TABLE).select("*")
 
     if environment:
         query = query.eq("environment", environment)

@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.config import POSITIONS_TABLE
+
 logger = logging.getLogger(__name__)
 
 POSITION_FILE = Path(__file__).parent.parent / "logs" / "position.json"
@@ -70,8 +72,8 @@ def save_position_supabase(position: Position) -> None:
     client = create_client(url, key)
 
     # 既存のポジションを削除してから保存
-    client.table("positions").delete().eq("symbol", position.symbol).execute()
-    client.table("positions").insert(asdict(position)).execute()
+    client.table(POSITIONS_TABLE).delete().eq("symbol", position.symbol).execute()
+    client.table(POSITIONS_TABLE).insert(asdict(position)).execute()
     logger.info(f"Position saved to Supabase: {position.symbol} @ {position.entry_price}")
 
 
@@ -84,7 +86,7 @@ def load_position_supabase(symbol: str) -> Optional[Position]:
     client = create_client(url, key)
 
     # 必要なカラムのみ取得（idは除外）
-    result = client.table("positions").select("symbol, entry_price, amount, entry_time").eq("symbol", symbol).execute()
+    result = client.table(POSITIONS_TABLE).select("symbol, entry_price, amount, entry_time").eq("symbol", symbol).execute()
     if result.data:
         return Position(**result.data[0])
     return None
@@ -98,7 +100,7 @@ def clear_position_supabase(symbol: str) -> None:
     key = os.environ["SUPABASE_KEY"]
     client = create_client(url, key)
 
-    client.table("positions").delete().eq("symbol", symbol).execute()
+    client.table(POSITIONS_TABLE).delete().eq("symbol", symbol).execute()
     logger.info("Position cleared from Supabase")
 
 
